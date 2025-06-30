@@ -11,9 +11,7 @@ const verifyToken = async (req, res, next) => {
   if (!accessToken) {
     // Nếu không có Access Token, ủy quyền bị từ chối ngay lập tức.
     // Điều này cũng bao gồm trường hợp hacker gửi yêu cầu mà không có token.
-    return res
-      .status(401)
-      .json({ msg: "Không có Access Token, ủy quyền bị từ chối." });
+    return res.status(401).json({ msg: "NoAccessTokenInCookie" });
   }
 
   try {

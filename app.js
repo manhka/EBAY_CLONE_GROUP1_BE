@@ -6,7 +6,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cors = require("cors");
 const morgan = require("morgan"); // Logging HTTP requests
-
+const path = require("path");
 // Import custom middlewares
 const applyCsrfProtection = require("./middlewares/csrfProtection");
 const errorHandler = require("./middlewares/errorHandler");
@@ -50,9 +50,16 @@ app.use(
   })
 );
 
+app.use(
+  "/uploads",
+  cors({
+    origin: allowedOrigin, // Allow only your frontend origin to access uploads
+    methods: ["GET", "HEAD"], // Static files are usually only GET/HEAD
+  })
+);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // CSRF Protection Middleware
 // This must come AFTER cookieParser and BEFORE any routes that you want to protect.
-app.use(applyCsrfProtection);
 
 // --- API Endpoints ---
 
@@ -63,7 +70,8 @@ app.get("/api/csrf-token", applyCsrfProtection, (req, res) => {
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
 const userRoutes = require("./routes/userRoutes");
-app.use("/api/", userRoutes);
+app.use("/api/", applyCsrfProtection, userRoutes);
+0;
 // --- Error Handling ---
 // This middleware must be placed LAST, after all routes and other middlewares
 app.use(errorHandler);

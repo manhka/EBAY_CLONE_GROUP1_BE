@@ -3,7 +3,7 @@
 const { validationResult } = require("express-validator");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken"); // Still needed for jwt.verify in refreshTokenHandler
-
+const mongoose = require("mongoose");
 // Import token generation helper functions
 const {
   generateAccessToken,
@@ -23,7 +23,7 @@ const registerUser = async (req, res, next) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { email, password } = req.body;
+  const { username, email, password } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -53,6 +53,7 @@ const registerUser = async (req, res, next) => {
     } else {
       // New user - Create UNVERIFIED user in DB
       const newUser = await User.create({
+        username,
         email,
         password, // Password will be hashed by the `pre('save')` middleware in `User.js`
         isVerified: false,
@@ -147,139 +148,325 @@ const loginUser = async (req, res, next) => {
 
   const { email, password } = req.body;
 
-  const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-  const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
-
   try {
-    const user = await User.findOne({ email }).select("+password");
+    // Select password and refreshTokens array to manage them
+    const user = await User.findOne({ email }).select(
+      "+password +refreshTokens"
+    ); // Select refreshTokens here
 
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ msg: "Invalid email or password." });
+    if (!user || !(await user.comparePassword(password))) {
+      console.log("Login failed: Invalid credentials for email:", email);
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    if (!user.isVerified) {
+    if (user.isVerified === false) {
       return res.status(401).json({
         msg: "Your account has not been verified. Please check your email for the PIN.",
       });
     }
 
-    // --- Generate Access Token and Refresh Token using helpers ---
+    const isSecure = process.env.NODE_ENV === "production";
+    console.log(
+      `Setting cookies. Secure flag: ${isSecure} (NODE_ENV: ${process.env.NODE_ENV})`
+    );
+
+    // --- DEBUG LOG: Check cookies BEFORE clearing ---
+    console.log("Login: Cookies received BEFORE clearing:", req.cookies);
+
+    // --- CRITICAL FIX: Clear old refreshToken cookie BEFORE setting new one ---
+    // Attempt to clear for both /api/auth path and root path /
+    // This tries to clear any stale refresh token, regardless of how its path was set previously.
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isSecure, // Use the same secure flag as the one being set
+      sameSite: "Lax",
+      path: "/api/auth", // Try clearing for the specific path it's currently set on
+    });
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: "Lax",
+      path: "/", // Try clearing for the root path as well, in case an older version set it broadly
+    });
+    console.log("Cleared old refreshToken cookies (attempted both paths).");
+
+    // 1. Generate Access Token
     const accessToken = generateAccessToken(user._id, user.email);
-    const refreshToken = generateRefreshToken(user._id);
 
-    // TODO: Optional but Recommended: Save Refresh Token to DB for revocation purposes
-    // If you add a `refreshTokens: [String]` array to your User model:
-    // user.refreshTokens.push(refreshToken);
-    // await user.save();
+    // 2. Generate Refresh Token (now also a JWT)
+    const refreshToken = generateRefreshToken(user._id); // This is now a JWT string
 
-    // --- Set Access Token Cookie ---
+    // 3. Manage refreshTokens array in user document
+    // Filter out expired/invalid refresh tokens from the DB array based on their 'exp' claim
+    const validRefreshTokens = [];
+    for (const storedToken of user.refreshTokens) {
+      try {
+        jwt.verify(storedToken, process.env.REFRESH_TOKEN_SECRET, {
+          ignoreExpiration: false,
+        });
+        validRefreshTokens.push(storedToken);
+      } catch (err) {
+        // Token is expired or invalid, filter it out
+        console.log(
+          `Login: Filtered out expired/invalid stored refresh token from DB: ${storedToken.substring(
+            0,
+            20
+          )}...`
+        );
+      }
+    }
+    user.refreshTokens = validRefreshTokens;
+    user.refreshTokens.push(refreshToken); // Add the new refresh token JWT string
+
+    await user.save({ validateBeforeSave: false }); // Do not re-run password hash pre-save hook
+    console.log("Saved new refresh token JWT to DB for user:", user._id);
+
+    // 4. Set Access Token as an HTTP-only cookie (short-lived)
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Only send over HTTPS in production
-      maxAge: ACCESS_TOKEN_MAX_AGE_MS,
+      secure: isSecure, // Use 'isSecure' variable
+      expires: new Date(Date.now() + 1 * 60 * 1000), // Access token expiry (5 minutes)
       sameSite: "Lax",
-      path: "/", // Or '/api' if all your API routes are under '/api'
+      path: "/",
     });
+    console.log("Set accessToken cookie.");
 
-    // --- Set Refresh Token Cookie ---
+    // 5. Set Refresh Token as an HTTP-only cookie (long-lived JWT string)
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+      secure: isSecure, // Use 'isSecure' variable
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Refresh token expiry (7 days)
       sameSite: "Lax",
-      path: "/api/auth/refresh-token", // IMPORTANT: Restrict to refresh endpoint
+      path: "/api/auth", // Important: Refresh token only accessible on auth refresh path
     });
+    console.log("Set new refreshToken cookie (JWT).");
 
-    res.status(200).json({
-      success: true,
-      msg: "Login successful!",
+    res.json({
+      message: "Logged in successfully",
       user: {
-        // Return non-sensitive user info for frontend display/state
         id: user._id,
+        username: user.username,
         email: user.email,
         isVerified: user.isVerified,
       },
     });
   } catch (error) {
-    console.error("Error in loginUser:", error.message);
+    console.error("Login process error:", error);
     next(error);
   }
 };
 
 // @desc    Refresh Access Token using Refresh Token
 // @route   POST /api/auth/refresh-token
-// @access  Public (but requires valid refreshToken cookie)
+// @access  Public (but protected by refresh token)
 const refreshTokenHandler = async (req, res, next) => {
-  const oldRefreshToken = req.cookies.refreshToken;
+  console.log("\n--- Refresh Token endpoint hit! ---");
+  console.log("Incoming request cookies:", req.cookies);
 
-  if (!oldRefreshToken) {
-    return res.status(401).json({ msg: "NoRefreshTokenProvided" });
-  }
+  const refreshTokenFromCookie = req.cookies.refreshToken;
 
-  try {
-    // 1. Verify the old Refresh Token
-    const decoded = jwt.verify(
-      oldRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET
+  if (!refreshTokenFromCookie) {
+    console.log(
+      "Refresh failed: No 'refreshToken' cookie found in the request."
     );
-
-    // 2. Find the user based on the ID from the Refresh Token
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ msg: "UserNotFoundForRefreshToken" });
-    }
-
-    // TODO: Optional but Recommended: Check if the oldRefreshToken is actually stored for this user in DB
-    // This helps prevent reuse of revoked refresh tokens and improves security.
-    if (!user.refreshTokens || !user.refreshTokens.includes(oldRefreshToken)) {
-      // If refresh token is not found or is blacklisted, consider it stolen.
-      // Invalidate all refresh tokens for this user for security (logout all devices).
-      // user.refreshTokens = []; await user.save();
-      return res.status(401).json({ msg: "RefreshTokenRevokedOrInvalid" });
-    }
-
-    // 3. Generate NEW Access Token and NEW Refresh Token (Token Rotation)
-    const newAccessToken = generateAccessToken(user._id, user.email);
-    const newRefreshToken = generateRefreshToken(user._id);
-
-    // TODO: Optional but Recommended: Update Refresh Token in DB (remove old, add new)
-    // user.refreshTokens = user.refreshTokens.filter(token => token !== oldRefreshToken);
-    // user.refreshTokens.push(newRefreshToken);
-    // await user.save();
-
-    const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-    const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000;
-
-    // 4. Set NEW Access Token Cookie
-    res.cookie("accessToken", newAccessToken, {
+    res.clearCookie("accessToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      maxAge: ACCESS_TOKEN_MAX_AGE_MS,
       sameSite: "Lax",
       path: "/",
     });
+    return res.status(401).json({
+      message: "No refresh token provided",
+      msg: "NoRefreshTokenProvided",
+    });
+  }
 
-    // 5. Set NEW Refresh Token Cookie (with updated expiry and value)
-    res.cookie("refreshToken", newRefreshToken, {
+  // Verify the refresh token JWT
+  let decodedRefreshToken;
+  try {
+    decodedRefreshToken = jwt.verify(
+      refreshTokenFromCookie,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+    console.log(
+      "Refresh token JWT verified. Decoded payload:",
+      decodedRefreshToken
+    );
+    // Add validation for decoded ID - ensure it's a valid ObjectId format if using MongoDB ObjectIDs
+    if (!mongoose.Types.ObjectId.isValid(decodedRefreshToken.id)) {
+      // NEW VALIDATION
+      console.warn(
+        "Refresh failed: Decoded refresh token ID is not a valid MongoDB ObjectId format."
+      );
+      throw new Error("Invalid ID format in refresh token.");
+    }
+  } catch (err) {
+    console.warn(
+      "Refresh failed: 'refreshToken' JWT is invalid or expired during verification.",
+      err.message
+    );
+    res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      maxAge: REFRESH_TOKEN_MAX_AGE_MS,
       sameSite: "Lax",
-      path: "/api/auth/refresh-token",
+      path: "/api/auth",
     });
-
-    res
-      .status(200)
-      .json({ success: true, msg: "Token has been refreshed successfully." });
-  } catch (err) {
-    console.error("Error refreshing token:", err.message);
-    // If Refresh Token is expired or invalid, force user to log in again
+    res.clearCookie("accessToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      path: "/",
+    });
     if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ msg: "RefreshTokenExpired" });
-    } else if (err.name === "JsonWebTokenError") {
-      return res.status(401).json({ msg: "RefreshTokenInvalid" });
+      return res.status(403).json({
+        message: "Refresh token expired. Please log in again.",
+        msg: "RefreshTokenExpired",
+      });
     }
-    next(err);
+    return res.status(403).json({
+      message: "Invalid refresh token. Please re-login.",
+      msg: "InvalidRefreshToken",
+    });
+  }
+
+  // Find the user by the ID from the decoded refresh token
+  try {
+    console.log(
+      "Attempting to find user with ID from decoded token:",
+      decodedRefreshToken.id
+    );
+    const user = await User.findById(decodedRefreshToken.id).select(
+      "+refreshTokens"
+    ); // Select refreshTokens
+
+    console.log(
+      "User found by decoded refresh token ID:",
+      user ? user._id : "None"
+    );
+
+    if (!user) {
+      console.log(
+        "Refresh failed: User not found from decoded refresh token ID (ID might be incorrect or user deleted)."
+      );
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        path: "/api/auth",
+      });
+      res.clearCookie("accessToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        path: "/",
+      });
+      return res.status(403).json({
+        message: "User associated with refresh token not found.",
+        msg: "UserNotFound",
+      });
+    }
+
+    // Check if the received refreshTokenFromCookie exists in the user's refreshTokens array in DB
+    const isTokenInDb = user.refreshTokens.includes(refreshTokenFromCookie);
+    console.log(
+      "Is refresh token (from cookie) found in user's DB array?",
+      isTokenInDb
+    );
+
+    if (!isTokenInDb) {
+      console.log(
+        "Refresh failed: Refresh token not found in DB array (revoked or not matching a valid session)."
+      );
+      // This is a critical point. If a token is reused (not found in DB but it was valid once),
+      // it could be a replay attack. Consider invalidating all refresh tokens for this user.
+      // For now, just clear cookies and force re-login.
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        path: "/api/auth",
+      });
+      res.clearCookie("accessToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        path: "/",
+      });
+      return res.status(403).json({
+        message: "Refresh token revoked or invalid.",
+        msg: "RefreshTokenRevokedOrInvalid",
+      });
+    }
+
+    // --- Token Rotation ---
+    // Remove the current (used) refresh token from the DB array
+    user.refreshTokens = user.refreshTokens.filter(
+      (token) => token !== refreshTokenFromCookie
+    );
+
+    // Also filter out any other expired/invalid tokens from the array before adding new one
+    const validRefreshTokens = [];
+    for (const storedToken of user.refreshTokens) {
+      try {
+        jwt.verify(storedToken, process.env.REFRESH_TOKEN_SECRET, {
+          ignoreExpiration: false,
+        });
+        validRefreshTokens.push(storedToken);
+      } catch (err) {
+        console.log(
+          `Filtered out expired/invalid stored refresh token during rotation cleanup: ${storedToken.substring(
+            0,
+            20
+          )}...`
+        );
+      }
+    }
+    user.refreshTokens = validRefreshTokens;
+    // --- End Token Rotation Cleanup ---
+
+    // Generate new Access Token and a NEW Refresh Token for the next cycle
+    const newAccessToken = generateAccessToken(user._id, user.email);
+    const newRefreshToken = generateRefreshToken(user._id); // Generate a brand new refresh token JWT
+
+    // Add the new refresh token to the user's array in DB
+    user.refreshTokens.push(newRefreshToken);
+    await user.save({ validateBeforeSave: false }); // Save changes to DB
+
+    const isSecure = process.env.NODE_ENV === "production";
+
+    // Set the new access token as an HTTP-only cookie
+    res.cookie("accessToken", newAccessToken, {
+      httpOnly: true,
+      secure: isSecure,
+      expires: new Date(Date.now() + 1 * 60 * 1000), // New access token expiry (5 minutes)
+      sameSite: "Lax",
+      path: "/",
+    });
+    console.log(
+      "Successfully refreshed access token and set new one for user:",
+      user._id
+    );
+
+    // Set the NEW refresh token as an HTTP-only cookie (IMPORTANT: this replaces the old one in the client)
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: isSecure,
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // New refresh token expiry (7 days)
+      sameSite: "Lax",
+      path: "/api/auth",
+    });
+    console.log(
+      "Successfully set new refresh token cookie for user:",
+      user._id
+    );
+
+    res.json({
+      message: "Access token refreshed successfully",
+      msg: "AccessTokenRefreshed",
+    });
+  } catch (error) {
+    console.error("Error during refresh token process:", error);
+    next(error); // Pass to general error handler
   }
 };
 

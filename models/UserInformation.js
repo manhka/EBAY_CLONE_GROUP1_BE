@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const userInformationSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       required: [true, "User ID is required."],
       ref: "User",
@@ -70,9 +70,38 @@ const userInformationSchema = new mongoose.Schema(
       maxlength: [50, "Country name cannot exceed 50 characters."],
       match: [/^[a-zA-Z\s]+$/, "Country can only contain letters and spaces."],
     },
+    birthday: {
+      type: Date,
+      required: [true, "Birthday is required."],
+      validate: {
+        validator: function (v) {
+          const today = new Date();
+          const birthDate = new Date(v);
+
+          // Set birthDate to the beginning of the day to avoid time-of-day issues
+          birthDate.setHours(0, 0, 0, 0);
+          today.setHours(0, 0, 0, 0);
+
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+
+          // Validate if age is between 16 and 100 (inclusive)
+          return age >= 16 && age <= 100;
+        },
+        message: "You must be between 16 and 100 years old.",
+      },
+    },
     isDefault: {
       type: Boolean,
       default: false,
+    },
+    avatar: {
+      type: String,
+      default: null,
     },
   },
   {
