@@ -1,5 +1,3 @@
-// D:\EBAY_CLONE\ebay_clone_be\utils\generatePin.js
-
 /**
  * Generates a random N-digit numerical PIN.
  * @param {number} length - The desired length of the PIN (e.g., 6 for a 6-digit PIN).

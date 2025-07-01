@@ -1,5 +1,5 @@
 const csrf = require("csurf");
-const cookieParser = require("cookie-parser"); // Ensure cookie-parser middleware is used before this
+const cookieParser = require("cookie-parser");
 
 // Initialize CSRF protection middleware with cookie-based tokens
 const csrfProtection = csrf({ cookie: true });

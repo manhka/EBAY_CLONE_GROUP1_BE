@@ -262,7 +262,16 @@ const loginUser = async (req, res, next) => {
 const refreshTokenHandler = async (req, res, next) => {
   console.log("\n--- Refresh Token endpoint hit! ---");
   console.log("Incoming request cookies:", req.cookies);
-
+  // Kiểm tra CSRF token
+  const csrfToken = req.header("X-CSRF-Token");
+  console.log(`=====>crsrToken: ${csrfToken}`);
+  if (!csrfToken) {
+    console.warn("Invalid or missing CSRF token.");
+    return res.status(403).json({
+      message: "Invalid CSRF token",
+      msg: "InvalidCSRFToken",
+    });
+  }
   const refreshTokenFromCookie = req.cookies.refreshToken;
 
   if (!refreshTokenFromCookie) {

@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const UserInformation = require("../models/UserInformation"); // Adjust the path as needed to your UserInformation model
 const mongoose = require("mongoose");
+const multer = require("multer");
 // @desc    Get user profile (View)
 // @route   GET /api/user-profile/:userId
 // @access  Private (Typically requires authentication and authorization)

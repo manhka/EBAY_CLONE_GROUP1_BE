@@ -1,5 +1,3 @@
-// D:\EBAY_CLONE\ebay_clone_be\services\emailService.js
-
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 
@@ -8,7 +6,7 @@ dotenv.config();
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || null,
   port: process.env.EMAIL_PORT || null,
-  service: process.env.EMAIL_SERVICE || null, // e.g., 'gmail'
+  service: process.env.EMAIL_SERVICE || null,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
