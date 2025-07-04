@@ -60,7 +60,8 @@ app.use(
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // CSRF Protection Middleware
 // This must come AFTER cookieParser and BEFORE any routes that you want to protect.
-
+const productRoutes = require("./routes/productRoutes");
+app.use("/api", productRoutes);
 // --- API Endpoints ---
 
 app.get("/api/csrf-token", applyCsrfProtection, (req, res) => {
