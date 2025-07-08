@@ -2,6 +2,7 @@
 
 const { validationResult } = require("express-validator");
 const User = require("../models/User");
+const UserInformation = require("../models/UserInformation");
 const jwt = require("jsonwebtoken"); // Still needed for jwt.verify in refreshTokenHandler
 const mongoose = require("mongoose");
 // Import token generation helper functions
@@ -31,7 +32,7 @@ const registerUser = async (req, res, next) => {
     const pin = generatePin(6); // Generate 6-digit PIN
     const pinExpiresAt = new Date(
       Date.now() +
-        (parseInt(process.env.PIN_EXPIRES_IN_MINUTES) || 2) * 60 * 1000
+      (parseInt(process.env.PIN_EXPIRES_IN_MINUTES) || 2) * 60 * 1000
     );
 
     if (user) {
@@ -165,6 +166,8 @@ const loginUser = async (req, res, next) => {
       });
     }
 
+    const userInfo = await UserInformation.findOne({ user: user._id });
+
     const isSecure = process.env.NODE_ENV === "production";
     console.log(
       `Setting cookies. Secure flag: ${isSecure} (NODE_ENV: ${process.env.NODE_ENV})`
@@ -222,7 +225,7 @@ const loginUser = async (req, res, next) => {
     console.log("Saved new refresh token JWT to DB for user:", user._id);
 
     // 4. Set Access Token as an HTTP-only cookie (short-lived)
-    res.cookie("accessToken", accessToken, {
+    res.json("accessToken", accessToken, {
       httpOnly: true,
       secure: isSecure, // Use 'isSecure' variable
       expires: new Date(Date.now() + 1 * 60 * 1000), // Access token expiry (5 minutes)
@@ -232,7 +235,7 @@ const loginUser = async (req, res, next) => {
     console.log("Set accessToken cookie.");
 
     // 5. Set Refresh Token as an HTTP-only cookie (long-lived JWT string)
-    res.cookie("refreshToken", refreshToken, {
+    res.json("refreshToken", refreshToken, {
       httpOnly: true,
       secure: isSecure, // Use 'isSecure' variable
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Refresh token expiry (7 days)
@@ -241,14 +244,19 @@ const loginUser = async (req, res, next) => {
     });
     console.log("Set new refreshToken cookie (JWT).");
 
+    const fullUserObject = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      fullName: userInfo ? userInfo.fullName : user.username,
+      avatar: userInfo ? userInfo.avatar : 'http://bootdey.com/img/Content/avatar/avatar1.png',
+      isVerified: user.isVerified
+    };
+
     res.json({
       message: "Logged in successfully",
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        isVerified: user.isVerified,
-      },
+      user: fullUserObject,
     });
   } catch (error) {
     console.error("Login process error:", error);
