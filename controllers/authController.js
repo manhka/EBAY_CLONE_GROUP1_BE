@@ -491,30 +491,39 @@ const refreshTokenHandler = async (req, res, next) => {
 // @desc    Log user out / Clear cookies
 // @route   POST /api/auth/logout
 // @access  Private (though accessible even without valid token to clear cookies)
-const logoutUser = (req, res) => {
-  // Clear accessToken cookie
-  res.clearCookie("accessToken", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "Lax",
-    path: "/",
-  });
+const logoutUser = async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
 
-  // Clear refreshToken cookie
-  res.clearCookie("refreshToken", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "Lax",
-    path: "/api/auth/refresh-token",
-  });
+    // Quan trọng: Xóa cookie ở phía client bằng cách gửi về header Set-Cookie với thời gian hết hạn trong quá khứ.
+    // Phải dùng các tùy chọn (path, domain) giống như khi đã tạo cookie.
+    res.clearCookie('accessToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      path: '/',
+    });
+    
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      path: '/api/auth', // Đường dẫn phải khớp chính xác với lúc tạo
+    });
 
-  // TODO: Optional: Invalidate refreshToken in DB if you stored it for revocation
-  // E.g., if (req.user && req.user.id) { // req.user comes from `protect` middleware
-  //   // Find and remove this specific refresh token from user.refreshTokens array
-  //   // await User.findByIdAndUpdate(req.user.id, { $pull: { refreshTokens: req.cookies.refreshToken } });
-  // }
+    // Nếu có refreshToken, xóa nó khỏi database để vô hiệu hóa hoàn toàn
+    if (refreshToken && req.userId) {
+      await User.findByIdAndUpdate(req.userId, {
+        $pull: { refreshTokens: refreshToken },
+      });
+    }
 
-  res.status(200).json({ success: true, msg: "Logged out successfully." });
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Vẫn trả về thành công ở client kể cả khi có lỗi server
+    res.status(204).send(); 
+  }
 };
 
 module.exports = {
