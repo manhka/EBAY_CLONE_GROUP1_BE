@@ -225,7 +225,7 @@ const loginUser = async (req, res, next) => {
     console.log("Saved new refresh token JWT to DB for user:", user._id);
 
     // 4. Set Access Token as an HTTP-only cookie (short-lived)
-    res.json("accessToken", accessToken, {
+    res.cookie("accessToken", accessToken, {
       httpOnly: true,
       secure: isSecure, // Use 'isSecure' variable
       expires: new Date(Date.now() + 1 * 60 * 1000), // Access token expiry (5 minutes)
@@ -235,7 +235,7 @@ const loginUser = async (req, res, next) => {
     console.log("Set accessToken cookie.");
 
     // 5. Set Refresh Token as an HTTP-only cookie (long-lived JWT string)
-    res.json("refreshToken", refreshToken, {
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: isSecure, // Use 'isSecure' variable
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Refresh token expiry (7 days)
@@ -257,6 +257,7 @@ const loginUser = async (req, res, next) => {
     res.json({
       message: "Logged in successfully",
       user: fullUserObject,
+      accessToken
     });
   } catch (error) {
     console.error("Login process error:", error);

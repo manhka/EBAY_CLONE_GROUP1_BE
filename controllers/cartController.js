@@ -100,8 +100,7 @@ const addToCart = async (req, res) => {
     console.log('Cart saved successfully');
     
     // Return populated cart
-    const populatedCart = await Cart.findById(cart._id)
-                                   .populate('items.productId');
+    const populatedCart = await cart.populate('items.productId');
     
     return res.status(200).json({
       success: true,
@@ -395,11 +394,29 @@ const updateCartItem = async (req, res) => {
     });
   }
 };
+
+const getCartItemCount = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const cart = await Cart.findOne({ user: userId });
+
+    const totalItems = cart
+      ? cart.items.reduce((acc, item) => acc + item.quantity, 0)
+      : 0;
+
+    res.json({ count: totalItems });
+  } catch (error) {
+    console.error("Error fetching cart count:", error);
+    res.status(500).json({ message: "Failed to get cart count" });
+  }
+};
+
 module.exports = {
   getCart,
   addToCart,
   updateCartItem,
   removeFromCart,
   clearCart,
-  mergeCarts
+  mergeCarts,
+  getCartItemCount
 };

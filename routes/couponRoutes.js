@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Coupon = require('../models/Coupon.js');
 
 // Tạo mã giảm giá mới
@@ -98,47 +99,71 @@ router.delete('/:id', async (req, res) => {
 router.post('/apply', async (req, res) => {
     try {
         const { code, productId } = req.body;
-        const coupon = await Coupon.findOne({ code });
+
+        if (!code || !productId) {
+            return res.status(400).json({ message: 'Thiếu mã giảm giá hoặc ID sản phẩm.' });
+        }
+
+        const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
 
         if (!coupon) {
-            return res.status(404).json({ message: 'Mã giảm giá không hợp lệ' });
+            return res.status(404).json({ message: 'Mã giảm giá không hợp lệ hoặc đã hết hạn.' });
         }
 
         // Kiểm tra thời hạn
         const now = new Date();
         if (now < coupon.startDate || now > coupon.endDate) {
-            return res.status(400).json({ message: 'Mã giảm giá không trong thời gian hiệu lực' });
+            return res.status(400).json({ message: 'Mã giảm giá không trong thời gian hiệu lực.' });
         }
 
-        // Kiểm tra sản phẩm
-        if (coupon.productId && coupon.productId.toString() !== productId) {
-            return res.status(400).json({ message: 'Mã giảm giá không áp dụng cho sản phẩm này' });
+        // Kiểm tra sản phẩm có được áp dụng không
+        const isApplicable = coupon.applicableProducts.length === 0 || coupon.applicableProducts.map(id => id.toString()).includes(productId);
+        if (!isApplicable) {
+            return res.status(400).json({ message: 'Mã giảm giá không áp dụng cho sản phẩm này.' });
         }
 
-        res.json({
-            message: 'Áp dụng mã giảm giá thành công',
-            couponDetails: {
+        // Trả về response nhất quán cho frontend
+        res.status(200).json({
+            success: true,
+            message: 'Áp dụng mã giảm giá thành công!',
+            discount: {
                 code: coupon.code,
-                discountPercent: coupon.discountPercent,
-                productId: coupon.productId
+                discountPercent: coupon.discountValue,
+                description: coupon.description
             }
         });
+
     } catch (error) {
-        console.error('Lỗi khi áp dụng mã giảm giá:', error);
-        res.status(500).json({ message: 'Lỗi server', error: error.message });
+        res.status(500).json({ message: 'Lỗi server khi áp dụng mã giảm giá', error: error.message });
     }
 });
 
 // Tìm mã giảm giá theo productId
 router.get('/product/:productId', async (req, res) => {
     try {
-        const coupons = await Coupon.find({ productId: req.params.productId });
-        if (!coupons || coupons.length === 0) {
-            return res.status(404).json({ message: 'Không tìm thấy mã giảm giá cho sản phẩm này' });
+        const { productId } = req.params;
+        const now = new Date();
+
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({ message: 'Product ID không hợp lệ.' });
         }
-        res.json(coupons);
+
+        // Tìm các mã còn hạn, đang hoạt động và áp dụng cho sản phẩm này HOẶC cho tất cả sản phẩm
+        const coupons = await Coupon.find({
+            $or: [
+                { applicableProducts: { $in: [productId] } }, // Áp dụng cho sản phẩm cụ thể
+                { applicableProducts: { $size: 0 } }          // Hoặc áp dụng cho tất cả (mảng rỗng)
+            ],
+            startDate: { $lte: now },
+            endDate: { $gte: now },
+            isActive: true
+        }).lean();
+
+        // Luôn trả về 200, dù có mã hay không, để frontend dễ xử lý
+        res.status(200).json(coupons);
+
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server', error: error.message });
+        res.status(500).json({ message: 'Lỗi server khi tìm mã giảm giá', error: error.message });
     }
 });
 

@@ -14,9 +14,12 @@ const errorHandler = require("./middlewares/errorHandler");
 // Import route handlers
 const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
 const userRoutes = require("./routes/userRoutes");
 const storeRoutes = require("./routes/storeRoutes");
 const cartRoutes = require("./routes/cartRoutes");
+const couponRouter = require("./routes/couponRoutes");
+
 // Load environment variables
 dotenv.config();
 
@@ -67,13 +70,14 @@ app.get("/api/csrf-token", applyCsrfProtection, (req, res) => {
 // CSRF protection được xử lý bên trong file authRoutes.js
 app.use("/api/auth", authRoutes);
 
-// Middleware này sẽ bảo vệ tất cả các route được định nghĩa sau nó.
 app.use("/api", applyCsrfProtection);
 
-app.use("/api", productRoutes);
-app.use("/api", userRoutes);
-app.use("/api", storeRoutes);
-app.use("/api", cartRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/stores", storeRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/coupons", couponRouter);
 
 app.use(errorHandler);
 

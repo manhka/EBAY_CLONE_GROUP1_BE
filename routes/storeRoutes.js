@@ -1,37 +1,30 @@
 const express = require("express");
-const db = require("../models");
+const mongoose = require("mongoose");
+const Product = require("../models/Product");
+const Store = require("../models/Store");
 
 const router = express.Router();
 
-// Định nghĩa route và viết logic xử lý ngay tại đây
-router.get('/product/:id', async (req, res) => {
+router.get('/by-product/:productId', async (req, res) => {
   try {
     const { productId } = req.params;
-
-    // Kiểm tra xem productId có hợp lệ không (tùy chọn)
-    if (!productId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({ message: 'Product ID không hợp lệ.' });
     }
-
-    // 1. Tìm sản phẩm dựa trên productId để lấy sellerId
-    const product = await db.Product.findById(productId);
-
+    const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm.' });
     }
-
-    // 2. Dùng sellerId từ sản phẩm để tìm thông tin cửa hàng
-    const store = await db.Store.findOne({ sellerId: product.sellerId });
-    
-    if (!store) {
-      return res.status(404).json({ message: 'Không tìm thấy cửa hàng cho người bán này.' });
+    if (!product.sellerId) {
+      return res.status(404).json({ message: 'Sản phẩm này không có thông tin người bán.' });
     }
-
-    // 3. Trả về thông tin cửa hàng nếu tìm thấy
+    const store = await Store.findOne({ sellerId: product.sellerId });
+    if (!store) {
+      return res.status(200).json(null);
+    }
     res.status(200).json(store);
-
   } catch (error) {
-    console.error("Lỗi trong storeRoutes:", error);
+    console.error("Lỗi trong storeRoutes (get by product):", error);
     res.status(500).json({ message: 'Lỗi máy chủ' });
   }
 });

@@ -9,6 +9,15 @@ const {
   logoutUser,
 } = require("../controllers/authController");
 const applyCsrfProtection = require("../middlewares/csrfProtection");
+const { auth } = require("../middlewares/authMiddleware");
+
+router.get("/check-session", auth, (req, res) => {
+  return res.json({
+    isAuthenticated: true,
+    userId: req.userId,
+  });
+});
+
 
 router.post(
   "/register",
