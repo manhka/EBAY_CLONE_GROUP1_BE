@@ -153,8 +153,9 @@ const loginUser = async (req, res, next) => {
     const user = await User.findOne({ email }).select(
       "+password +refreshTokens"
     ); // Select refreshTokens here
-
-    if (!user || !(await user.comparePassword(password))) {
+    console.log(`===============> ${user}`);
+    console.log(`===============> ${password}`);
+    if (!user || !( user.password === password)) {
       console.log("Login failed: Invalid credentials for email:", email);
       return res.status(400).json({ message: "Invalid credentials" });
     }

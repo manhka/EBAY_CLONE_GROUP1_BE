@@ -71,6 +71,14 @@ const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
 const userRoutes = require("./routes/userRoutes");
 app.use("/api/", applyCsrfProtection, userRoutes);
+
+// Import and use Order Routes
+const orderRoutes = require("./routes/orderRoutes");
+app.use("/api/orders", applyCsrfProtection, orderRoutes);
+
+// Import and use Return Request Routes
+const returnRequestRoutes = require("./routes/returnRequestRoutes");
+app.use("/api/return-requests", applyCsrfProtection, returnRequestRoutes);
 0;
 // --- Error Handling ---
 // This middleware must be placed LAST, after all routes and other middlewares
