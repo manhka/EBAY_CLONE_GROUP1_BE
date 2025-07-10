@@ -1,72 +1,79 @@
+// app.js
 const express = require("express");
-const path = require("path");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
-const csrf = require("csurf");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cors = require("cors");
+const morgan = require("morgan"); // Logging HTTP requests
+const path = require("path");
+// Import custom middlewares
+const applyCsrfProtection = require("./middlewares/csrfProtection");
+const errorHandler = require("./middlewares/errorHandler");
 
-// Load biến môi trường
+// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Middleware bảo mật
+// Security Headers with Helmet
 app.use(helmet());
+
+// Rate Limiting to prevent brute-force attacks
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
     message: "Quá nhiều yêu cầu từ IP này. Vui lòng thử lại sau.",
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   })
 );
 
+// Body Parsers for JSON and URL-encoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Cookie Parser
 app.use(cookieParser());
 
-// CORS cho phép React frontend truy cập
+// HTTP Request Logger (useful for debugging)
+app.use(morgan("dev")); // 'dev' format for concise, colored output
+
+// CORS Configuration
+// Allow requests from your frontend (even if not present yet, good practice)
+const allowedOrigin = "http://localhost:3001";
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true,
+    origin: allowedOrigin,
+    credentials: true, // Allow cookies to be sent (needed for CSRF)
   })
 );
 
-// CSRF
-const csrfProtection = csrf({ cookie: true });
-app.use(csrfProtection);
-app.use((req, res, next) => {
-  res.locals.csrfToken = req.csrfToken();
-  next();
-});
+app.use(
+  "/uploads",
+  cors({
+    origin: allowedOrigin, // Allow only your frontend origin to access uploads
+    methods: ["GET", "HEAD"], // Static files are usually only GET/HEAD
+  })
+);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// CSRF Protection Middleware
+// This must come AFTER cookieParser and BEFORE any routes that you want to protect.
 
-// Endpoint để React frontend lấy CSRF token nếu cần
-app.get("/api/csrf-token", (req, res) => {
+// --- API Endpoints ---
+
+app.get("/api/csrf-token", applyCsrfProtection, (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
-
-// API Routes
-const authRouter = require("./routes/authRoutes");
-
-// app.use("/api/auth", authRouter);
-
-// (Tuỳ chọn) Nếu bạn build React trong cùng thư mục server
-const clientBuildPath = path.join(__dirname, "client", "build");
-app.use(express.static(clientBuildPath));
-
-// Bắt mọi route còn lại và trả về React app
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(clientBuildPath, "index.html"));
-// });
-
-// CSRF error handling
-app.use((err, req, res, next) => {
-  if (err.code === "EBADCSRFTOKEN") {
-    return res.status(403).json({ msg: "Token CSRF không hợp lệ hoặc thiếu" });
-  }
-  next(err);
-});
+// Import and use Auth Routes
+const authRoutes = require("./routes/authRoutes");
+app.use("/api/auth", authRoutes);
+const userRoutes = require("./routes/userRoutes");
+app.use("/api/", applyCsrfProtection, userRoutes);
+0;
+// --- Error Handling ---
+// This middleware must be placed LAST, after all routes and other middlewares
+app.use(errorHandler);
 
 module.exports = app;
