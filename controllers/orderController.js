@@ -71,6 +71,8 @@ exports.createOrder = async (req, res) => {
             unitPrice: product.price
         };
     });
+    console.log("🧾 OrderItems sẽ tạo:", orderItemsToCreate);
+
     await OrderItem.insertMany(orderItemsToCreate, { session });
     
     // 5. Tạo Payment

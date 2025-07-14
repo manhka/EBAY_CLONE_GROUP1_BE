@@ -6,7 +6,7 @@ const userInformationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: [true, "User ID is required."],
       ref: "User",
-      unique: true,
+      unique: false,
     },
     fullName: {
       type: String,

@@ -17,6 +17,7 @@ exports.getUserProfile = async (req, res) => {
       user: objectId,
     });
     const userProfileResponse = {
+      _id: userProfile?._id,
       username: user.username,
       email: user.email,
       fullName: userProfile?.fullName,
@@ -284,3 +285,45 @@ exports.createUserProfile = async (req, res) => {
     res.status(500).json({ message: "Server error.", error: error.message });
   }
 };
+
+exports.addUserAddress = async (req, res) => {
+  try {
+    const {
+      fullName, phone, street, city, state, country, birthday, avatar
+    } = req.body;
+
+    const userId = req.user._id;
+
+    const newAddress = await UserInformation.create({
+      user: userId,
+      fullName,
+      phone,
+      street,
+      city,
+      state,
+      country,
+      birthday,
+      avatar,
+    });
+
+    res.status(201).json(newAddress);
+  } catch (err) {
+    console.error("❌ Lỗi khi thêm địa chỉ:", err);
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+};
+
+exports.getUserAddresses = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    console.log("🧾 user._id từ token:", userId);
+
+    const addresses = await UserInformation.find({ user: new mongoose.Types.ObjectId(userId) }).lean();
+
+    res.json(addresses);
+  } catch (err) {
+    console.error("🔥 Lỗi khi lấy danh sách địa chỉ:", err);
+    res.status(500).json({ message: "Lỗi khi lấy danh sách địa chỉ", error: err.message });
+  }
+};
+

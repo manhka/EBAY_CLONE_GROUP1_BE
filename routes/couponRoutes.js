@@ -9,7 +9,7 @@ router.post('/create', async (req, res) => {
         const {
             code,
             discountType,
-            discountValue,
+            discountPercent,
             minPurchaseAmount,
             maxDiscountAmount,
             startDate,
@@ -26,7 +26,7 @@ router.post('/create', async (req, res) => {
         const coupon = new Coupon({
             code,
             discountType,
-            discountValue,
+            discountPercent,
             minPurchaseAmount,
             maxDiscountAmount,
             startDate,
@@ -110,33 +110,41 @@ router.post('/apply', async (req, res) => {
             return res.status(404).json({ message: 'Mã giảm giá không hợp lệ hoặc đã hết hạn.' });
         }
 
-        // Kiểm tra thời hạn
+        // Đảm bảo startDate và endDate là kiểu Date
         const now = new Date();
-        if (now < coupon.startDate || now > coupon.endDate) {
+        const startDate = new Date(coupon.startDate);
+        const endDate = new Date(coupon.endDate);
+
+        if (now < startDate || now > endDate) {
             return res.status(400).json({ message: 'Mã giảm giá không trong thời gian hiệu lực.' });
         }
 
         // Kiểm tra sản phẩm có được áp dụng không
-        const isApplicable = coupon.applicableProducts.length === 0 || coupon.applicableProducts.map(id => id.toString()).includes(productId);
+        const applicableProducts = coupon.applicableProducts || [];
+        const isApplicable =
+            applicableProducts.length === 0 ||
+            applicableProducts.map(id => id.toString()).includes(productId.toString());
+
         if (!isApplicable) {
             return res.status(400).json({ message: 'Mã giảm giá không áp dụng cho sản phẩm này.' });
         }
 
-        // Trả về response nhất quán cho frontend
-        res.status(200).json({
+        // Trả về response rõ ràng
+        return res.status(200).json({
             success: true,
             message: 'Áp dụng mã giảm giá thành công!',
-            discount: {
-                code: coupon.code,
-                discountPercent: coupon.discountValue,
-                description: coupon.description
-            }
+            discount: coupon  
         });
 
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server khi áp dụng mã giảm giá', error: error.message });
+        console.error("Error in /coupons/validate:", error);
+        return res.status(500).json({
+            message: 'Lỗi server khi áp dụng mã giảm giá',
+            error: error.message,
+        });
     }
 });
+
 
 // Tìm mã giảm giá theo productId
 router.get('/product/:productId', async (req, res) => {
