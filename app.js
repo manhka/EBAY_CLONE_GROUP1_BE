@@ -20,6 +20,8 @@ const storeRoutes = require("./routes/storeRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const couponRouter = require("./routes/couponRoutes");
 const orderRouter = require("./routes/orderRoutes")
+const reviewRoutes = require('./routes/reviewRoute');
+const userActivityRoute = require("./routes/userActivityRoute");
 // Load environment variables
 dotenv.config();
 
@@ -79,6 +81,9 @@ app.use("/api/stores", storeRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/coupons", couponRouter);
 app.use("/api/orders", orderRouter);
+app.use('/api/reviews', reviewRoutes);
+app.use("/api/user-activity", userActivityRoute);
+
 app.use(errorHandler);
 
 module.exports = app;
