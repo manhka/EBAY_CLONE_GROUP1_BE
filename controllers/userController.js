@@ -9,6 +9,7 @@ const multer = require("multer");
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log(userId);
     const user = await User.findById(userId);
     const objectId = mongoose.Types.ObjectId.isValid(userId)
       ? new mongoose.Types.ObjectId(userId)
@@ -288,9 +289,8 @@ exports.createUserProfile = async (req, res) => {
 
 exports.addUserAddress = async (req, res) => {
   try {
-    const {
-      fullName, phone, street, city, state, country, birthday, avatar
-    } = req.body;
+    const { fullName, phone, street, city, state, country, birthday, avatar } =
+      req.body;
 
     const userId = req.user._id;
 
@@ -318,12 +318,15 @@ exports.getUserAddresses = async (req, res) => {
     const userId = req.user._id;
     console.log("🧾 user._id từ token:", userId);
 
-    const addresses = await UserInformation.find({ user: new mongoose.Types.ObjectId(userId) }).lean();
+    const addresses = await UserInformation.find({
+      user: new mongoose.Types.ObjectId(userId),
+    }).lean();
 
     res.json(addresses);
   } catch (err) {
     console.error("🔥 Lỗi khi lấy danh sách địa chỉ:", err);
-    res.status(500).json({ message: "Lỗi khi lấy danh sách địa chỉ", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Lỗi khi lấy danh sách địa chỉ", error: err.message });
   }
 };
-
