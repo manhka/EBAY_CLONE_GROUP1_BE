@@ -1,72 +1,84 @@
 const express = require("express");
-const path = require("path");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
-const csrf = require("csurf");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cors = require("cors");
+const morgan = require("morgan");
+const path = require("path");
 
-// Load biến môi trường
+// Import custom middlewares
+const applyCsrfProtection = require("./middlewares/csrfProtection");
+const errorHandler = require("./middlewares/errorHandler");
+
+// Import route handlers
+const authRoutes = require("./routes/authRoutes");
+const productRoutes = require("./routes/productRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const userRoutes = require("./routes/userRoutes");
+const storeRoutes = require("./routes/storeRoutes");
+const cartRoutes = require("./routes/cartRoutes");
+const couponRouter = require("./routes/couponRoutes");
+const orderRouter = require("./routes/orderRoutes")
+// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Middleware bảo mật
+// --- CORE MIDDLEWARES (chạy trước tiên) ---
+
+// Security Headers
 app.use(helmet());
+
+// Rate Limiting
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200,
     message: "Quá nhiều yêu cầu từ IP này. Vui lòng thử lại sau.",
+    standardHeaders: true,
+    legacyHeaders: false,
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-// CORS cho phép React frontend truy cập
+// CORS Configuration
+const allowedOrigin = "http://localhost:3001";
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: allowedOrigin,
     credentials: true,
   })
 );
 
-// CSRF
-const csrfProtection = csrf({ cookie: true });
-app.use(csrfProtection);
-app.use((req, res, next) => {
-  res.locals.csrfToken = req.csrfToken();
-  next();
-});
+// Body Parsers & Cookie Parser
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// Endpoint để React frontend lấy CSRF token nếu cần
-app.get("/api/csrf-token", (req, res) => {
+// HTTP Request Logger
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan("dev"));
+}
+
+// Serve static files (uploads)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+app.get("/api/csrf-token", applyCsrfProtection, (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
-// API Routes
-const authRouter = require("./routes/authRoutes");
+// CSRF protection được xử lý bên trong file authRoutes.js
+app.use("/api/auth", authRoutes);
 
-// app.use("/api/auth", authRouter);
+app.use("/api", applyCsrfProtection);
 
-// (Tuỳ chọn) Nếu bạn build React trong cùng thư mục server
-const clientBuildPath = path.join(__dirname, "client", "build");
-app.use(express.static(clientBuildPath));
-
-// Bắt mọi route còn lại và trả về React app
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(clientBuildPath, "index.html"));
-// });
-
-// CSRF error handling
-app.use((err, req, res, next) => {
-  if (err.code === "EBADCSRFTOKEN") {
-    return res.status(403).json({ msg: "Token CSRF không hợp lệ hoặc thiếu" });
-  }
-  next(err);
-});
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/stores", storeRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/coupons", couponRouter);
+app.use("/api/orders", orderRouter);
+app.use(errorHandler);
 
 module.exports = app;
