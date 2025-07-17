@@ -24,38 +24,8 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "processing", "shipping", "completed", "cancelled", "return_requested", "returned"],
-      default: "pending",
       required: [true, "Order status is required"],
     },
-    items: [
-      {
-        productId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          required: true,
-        },
-        unitPrice: {
-          type: Number,
-          required: true,
-        },
-      },
-    ],
-    paypalOrderId: {
-      type: String
-    },
-    appliedCouponCode: {
-      type: String,
-      default: null
-    },
-    paymentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Payment"
-    }
   },
   {
     timestamps: true,
@@ -70,4 +40,4 @@ orderSchema.index({ orderDate: -1 });
 
 const Order = mongoose.model("Order", orderSchema);
 
-module.exports = Order;
+module.exports = Order; 

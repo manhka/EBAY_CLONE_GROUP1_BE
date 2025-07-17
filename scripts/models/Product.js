@@ -45,13 +45,7 @@ const productSchema = new mongoose.Schema(
     sellerId: {
       type: mongoose.Schema.Types.ObjectId,
       required: [true, "Seller ID is required"],
-      ref: "User",
-    },
-    quantity: {
-      type: Number,
-      required: [true, "Product quantity is required"],
-      min: [0, "Quantity cannot be negative"],
-      default: 0
+      ref: "Store",
     },
     isAuction: {
       type: Boolean,
@@ -70,10 +64,6 @@ const productSchema = new mongoose.Schema(
         },
         message: "Auction end time must be in the future for auction products"
       }
-    },
-    views: {
-      type: Number,
-      default: 0
     }
   },
   {
@@ -84,6 +74,7 @@ const productSchema = new mongoose.Schema(
 // Indexes for better performance
 productSchema.index({ categoryId: 1 });
 productSchema.index({ sellerId: 1 });
+productSchema.index({ status: 1 });
 productSchema.index({ isAuction: 1, auctionEndTime: 1 });
 productSchema.index({ title: "text", description: "text" });
 
@@ -112,4 +103,4 @@ productSchema.methods.incrementViews = function() {
 
 const Product = mongoose.model("Product", productSchema);
 
-module.exports = Product;
+module.exports = Product; 

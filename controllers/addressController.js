@@ -35,7 +35,7 @@ exports.addAddress = async (req, res) => {
 
     const newAddress = new Address({
       userId: req.params.userId,
-      fullname: req.body.fullname.trim(),
+      fullName: req.body.fullName ? req.body.fullName.trim() : req.body.fullname?.trim(),
       phone: req.body.phone.trim(),
       street: req.body.street.trim(),
       city: req.body.city.trim(),
@@ -89,9 +89,11 @@ exports.updateAddress = async (req, res) => {
         .json({ message: "Bạn không có quyền cập nhật địa chỉ." });
     }
 
-    address.fullname = req.body.fullname
-      ? req.body.fullname.trim()
-      : address.fullname;
+    address.fullName = req.body.fullName 
+      ? req.body.fullName.trim() 
+      : req.body.fullname 
+        ? req.body.fullname.trim() 
+        : address.fullName;
     address.phone = req.body.phone ? req.body.phone.trim() : address.phone;
     address.street = req.body.street ? req.body.street.trim() : address.street;
     address.city = req.body.city ? req.body.city.trim() : address.city;

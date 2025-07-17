@@ -12,7 +12,7 @@ const { body, validationResult } = require("express-validator");
 const router = express.Router();
 
 const addressValidation = [
-  body("fullname")
+  body("fullName")
     .notEmpty()
     .withMessage("Họ và tên không được để trống.")
     .trim(),

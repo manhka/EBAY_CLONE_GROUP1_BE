@@ -6,6 +6,9 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 const UserInformation = require("../models/UserInformation");
 const ObjectId = mongoose.Types.ObjectId;
+const { param } = require("express-validator");
+const orderController = require("../controllers/orderController");
+const verifyToken = require("../middlewares/verifyToken");
 
 // PayPal SDK config
 const environment = new paypal.core.SandboxEnvironment(
@@ -13,6 +16,23 @@ const environment = new paypal.core.SandboxEnvironment(
   process.env.PAYPAL_CLIENT_SECRET
 );
 const paypalClient = new paypal.core.PayPalHttpClient(environment);
+
+// Get order history for authenticated user
+// GET /api/orders?page=1&limit=10&status=delivered
+router.get("/", verifyToken, orderController.getOrderHistory);
+
+// Get order details by ID
+// GET /api/orders/:orderId
+router.get(
+  "/:orderId",
+  verifyToken,
+  [
+    param("orderId")
+      .isMongoId()
+      .withMessage("Invalid order ID format"),
+  ],
+  orderController.getOrderDetails
+);
 
 // Tạo PayPal Order
 router.post("/create", async (req, res) => {
@@ -150,7 +170,6 @@ router.get("/detail/:orderId", async (req, res) => {
     return res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 });
-
 
 router.get("/status/:orderId", async (req, res) => {
   try {
@@ -334,6 +353,5 @@ router.post("/success", async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 });
-
 
 module.exports = router;

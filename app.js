@@ -22,6 +22,8 @@ const couponRouter = require("./routes/couponRoutes");
 const orderRouter = require("./routes/orderRoutes")
 const reviewRoutes = require('./routes/reviewRoute');
 const userActivityRoute = require("./routes/userActivityRoute");
+const returnRequestRoutes = require("./routes/returnRequestRoutes");
+
 // Load environment variables
 dotenv.config();
 
@@ -84,6 +86,11 @@ app.use("/api/orders", orderRouter);
 app.use('/api/reviews', reviewRoutes);
 app.use("/api/user-activity", userActivityRoute);
 
+// Import and use Return Request Routes
+app.use("/api/return-requests", applyCsrfProtection, returnRequestRoutes);
+
+// --- Error Handling ---
+// This middleware must be placed LAST, after all routes and other middlewares
 app.use(errorHandler);
 
 module.exports = app;
